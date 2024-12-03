@@ -1,5 +1,3 @@
-# File: homework/planner.py
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -77,7 +75,11 @@ def load_model():
     model_path = path.join(path.dirname(path.abspath(__file__)), 'planner.th')
     if path.exists(model_path):
         state_dict = load(model_path, map_location='cpu')
-        model.load_state_dict(state_dict)
+
+        # Adjust state_dict keys to match current architecture
+        filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
+        
+        model.load_state_dict(filtered_state_dict, strict=False)  # Allow partial loading
     else:
         raise FileNotFoundError(f"No saved model found at {model_path}")
     return model
