@@ -1,3 +1,5 @@
+# File: homework/planner.py
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,36 +13,34 @@ def spatial_argmax(logit):
     """
     batch_size, H, W = logit.shape
     weights = F.softmax(logit.view(batch_size, -1), dim=1).view_as(logit)
-
+    
     pos_x = torch.linspace(-1, 1, W).to(logit.device)
     pos_y = torch.linspace(-1, 1, H).to(logit.device)
-
+    
     expected_x = (weights.sum(1) * pos_x).sum(1)
     expected_y = (weights.sum(2) * pos_y).sum(1)
-
+    
     return torch.stack([expected_x, expected_y], dim=1)
 
 class Planner(nn.Module):
     def __init__(self):
         super(Planner, self).__init__()
         # Load ResNet18 model without pretrained weights
-        self.resnet = models.resnet18(weights=None)
+        resnet = models.resnet18(weights=None)
         # Modify the first convolutional layer
-        self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         # Remove the maxpool layer
-        self.resnet.maxpool = nn.Identity()
-        # **Remove the avgpool layer**
-        self.resnet.avgpool = nn.Identity()
-        # Remove the fully connected layer
-        self.resnet.fc = nn.Identity()
-
+        resnet.maxpool = nn.Identity()
+        # Extract layers up to layer4 (exclude avgpool and fc)
+        self.resnet = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
+        
         # Add custom convolutional layers for spatial regression
         self.conv_regression = nn.Sequential(
             nn.Conv2d(512, 256, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(256, 2, kernel_size=1)
         )
-
+    
     def forward(self, img):
         # Pass through modified ResNet
         x = self.resnet(img)  # Now x has shape [batch_size, 512, H, W]
@@ -63,7 +63,8 @@ def load_model():
     model = Planner()
     model_path = path.join(path.dirname(path.abspath(__file__)), 'planner.th')
     if path.exists(model_path):
-        model.load_state_dict(load(model_path, map_location='cpu'))
+        state_dict = load(model_path, map_location='cpu')
+        model.load_state_dict(state_dict)
     else:
         raise FileNotFoundError(f"No saved model found at {model_path}")
     return model
