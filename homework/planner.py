@@ -31,8 +31,13 @@ class Planner(nn.Module):
         resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         # Remove the maxpool layer
         resnet.maxpool = nn.Identity()
-        # Extract layers up to layer4 (exclude avgpool and fc)
-        self.resnet = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
+        # Remove the avgpool layer
+        resnet.avgpool = nn.Identity()
+        # Remove the fully connected layer
+        resnet.fc = nn.Identity()
+        
+        # Assign the modified ResNet to self.resnet
+        self.resnet = resnet  # Retains original layer names like resnet.conv1, resnet.layer1, etc.
         
         # Add custom convolutional layers for spatial regression
         self.conv_regression = nn.Sequential(
