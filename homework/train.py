@@ -1,5 +1,3 @@
-# File: homework/train.py
-
 from planner import Planner, save_model
 import torch
 import torch.utils.tensorboard as tb
@@ -8,6 +6,8 @@ from utils import load_data
 import dense_transforms
 from torch.utils.data import random_split
 import time
+import matplotlib.pyplot as plt  # Added for plotting
+
 
 def train(args):
     from os import path
@@ -50,6 +50,10 @@ def train(args):
     
     global_step = 0
     start_time = time.time()
+
+    # To store losses for plotting
+    train_loss_history = []
+    val_loss_history = []
     
     for epoch in range(args.num_epoch):
         epoch_start_time = time.time()
@@ -86,6 +90,7 @@ def train(args):
                 print(f"Epoch [{epoch+1}/{args.num_epoch}], Step [{batch_idx}/{len(train_loader)}], Loss: {loss_val.item():.4f}")
         
         avg_train_loss = np.mean(train_losses) if train_losses else float('inf')
+        train_loss_history.append(avg_train_loss)
         epoch_duration = time.time() - epoch_start_time
         print(f"Epoch {epoch+1} Completed - Avg Train Loss: {avg_train_loss:.4f} - Duration: {epoch_duration:.2f}s")
         
@@ -105,6 +110,7 @@ def train(args):
                     continue  # Skip this batch
         
         avg_val_loss = np.mean(val_losses) if val_losses else float('inf')
+        val_loss_history.append(avg_val_loss)
         print(f"Epoch {epoch+1} Completed - Avg Validation Loss: {avg_val_loss:.4f}")
         
         if valid_logger is not None:
@@ -117,6 +123,26 @@ def train(args):
     total_duration = time.time() - start_time
     print(f"\nTraining Completed - Total Duration: {total_duration/60:.2f} minutes")
     save_model(model)
+
+    # Plot training and validation loss
+    plot_loss(train_loss_history, val_loss_history)
+
+
+def plot_loss(train_loss, val_loss):
+    """
+    Plot the training and validation loss.
+    """
+    epochs = range(1, len(train_loss) + 1)
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, train_loss, 'b-', label='Training Loss')
+    plt.plot(epochs, val_loss, 'r-', label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
 
 def log(logger, img, label, pred, global_step):
     """
@@ -147,7 +173,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Planner Model')
     
     parser.add_argument('--log_dir', type=str, default=None, help='Directory for TensorBoard logs')
-    parser.add_argument('-n', '--num_epoch', type=int, default=3, help='Number of training epochs')
+    parser.add_argument('-n', '--num_epoch', type=int, default=50, help='Number of training epochs')
     parser.add_argument('-w', '--num_workers', type=int, default=4, help='Number of data loader workers')
     parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('-c', '--continue_training', action='store_true', help='Continue training from saved model')
