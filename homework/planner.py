@@ -11,10 +11,13 @@ def spatial_argmax(logit):
     """
     batch_size, H, W = logit.shape
     weights = F.softmax(logit.view(batch_size, -1), dim=1).view_as(logit)
+
     pos_x = torch.linspace(-1, 1, W).to(logit.device)
     pos_y = torch.linspace(-1, 1, H).to(logit.device)
+
     expected_x = (weights.sum(1) * pos_x).sum(1)
     expected_y = (weights.sum(2) * pos_y).sum(1)
+
     return torch.stack([expected_x, expected_y], dim=1)
 
 class Planner(nn.Module):
@@ -26,8 +29,10 @@ class Planner(nn.Module):
         self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         # Remove the maxpool layer
         self.resnet.maxpool = nn.Identity()
+        # **Remove the avgpool layer**
+        self.resnet.avgpool = nn.Identity()
         # Remove the fully connected layer
-        self.resnet.fc = nn.Identity()  # Since we don't need the fc layer
+        self.resnet.fc = nn.Identity()
 
         # Add custom convolutional layers for spatial regression
         self.conv_regression = nn.Sequential(
@@ -37,9 +42,12 @@ class Planner(nn.Module):
         )
 
     def forward(self, img):
-        x = self.resnet(img)
-        x = self.conv_regression(x)
-        x = spatial_argmax(x[:, 0])
+        # Pass through modified ResNet
+        x = self.resnet(img)  # Now x has shape [batch_size, 512, H, W]
+        # Pass through regression layers
+        x = self.conv_regression(x)  # x now has shape [batch_size, 2, H, W]
+        # Compute the spatial argmax
+        x = spatial_argmax(x[:, 0])  # x is now [batch_size, 2]
         return x
 
 def save_model(model):
