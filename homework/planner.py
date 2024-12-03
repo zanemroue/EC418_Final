@@ -47,11 +47,19 @@ class Planner(nn.Module):
         )
     
     def forward(self, img):
-        # Pass through modified ResNet
-        x = self.resnet(img)  # Now x has shape [batch_size, 512, H, W]
-        # Pass through regression layers
+        # Manually define the forward pass to prevent flattening
+        x = self.resnet.conv1(img)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)
+        
+        # Do not apply avgpool or flatten
         x = self.conv_regression(x)  # x now has shape [batch_size, 2, H, W]
-        # Compute the spatial argmax
         x = spatial_argmax(x[:, 0])  # x is now [batch_size, 2]
         return x
 
