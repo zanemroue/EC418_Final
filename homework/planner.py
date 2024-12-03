@@ -1,5 +1,3 @@
-# File: homework/planner.py
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,42 +11,35 @@ def spatial_argmax(logit):
     """
     batch_size, H, W = logit.shape
     weights = F.softmax(logit.view(batch_size, -1), dim=1).view_as(logit)
-    
-    # Create position tensors
-    pos_x = torch.linspace(-1, 1, W).to(logit.device)  # Shape: (W,)
-    pos_y = torch.linspace(-1, 1, H).to(logit.device)  # Shape: (H,)
-    
-    # Compute expected coordinates
-    expected_x = (weights.sum(1) * pos_x).sum(1)  # Shape: (batch_size,)
-    expected_y = (weights.sum(2) * pos_y).sum(1)  # Shape: (batch_size,)
-    
-    return torch.stack([expected_x, expected_y], dim=1)  # Shape: (batch_size, 2)
+    pos_x = torch.linspace(-1, 1, W).to(logit.device)
+    pos_y = torch.linspace(-1, 1, H).to(logit.device)
+    expected_x = (weights.sum(1) * pos_x).sum(1)
+    expected_y = (weights.sum(2) * pos_y).sum(1)
+    return torch.stack([expected_x, expected_y], dim=1)
 
 class Planner(nn.Module):
     def __init__(self):
         super(Planner, self).__init__()
-        # Load ResNet18 model without the fully connected layer
-        resnet = models.resnet18(pretrained=False)
-        resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        resnet.maxpool = nn.Identity()
-        self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
-        
+        # Load ResNet18 model without pretrained weights
+        self.resnet = models.resnet18(weights=None)
+        # Modify the first convolutional layer
+        self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        # Remove the maxpool layer
+        self.resnet.maxpool = nn.Identity()
+        # Remove the fully connected layer
+        self.resnet.fc = nn.Identity()  # Since we don't need the fc layer
+
         # Add custom convolutional layers for spatial regression
         self.conv_regression = nn.Sequential(
             nn.Conv2d(512, 256, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(256, 2, kernel_size=1)
         )
-        
+
     def forward(self, img):
-        """
-        Predict the aim point in image coordinate, given the SuperTuxKart image
-        @img: (B, 3, H, W)
-        return: (B, 2)
-        """
-        x = self.features(img)  # Output shape: (B, 512, H', W')
-        x = self.conv_regression(x)  # Output shape: (B, 2, H', W')
-        x = spatial_argmax(x[:, 0])  # Apply spatial argmax on the first channel
+        x = self.resnet(img)
+        x = self.conv_regression(x)
+        x = spatial_argmax(x[:, 0])
         return x
 
 def save_model(model):
