@@ -33,10 +33,10 @@ def train(args):
 
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    
+
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
-
+    
     # Load and split data into training and validation sets
     full_dataset = load_data('drive_data', transform=transform, num_workers=args.num_workers)
     if len(full_dataset) == 0:
@@ -59,7 +59,11 @@ def train(args):
         
         for batch_idx, (img, label) in enumerate(train_loader, 1):
             img, label = img.to(device), label.to(device)
-
+            
+            # Debugging: Print the shape of img and label
+            if batch_idx == 1:
+                print(f"Batch {batch_idx}: img shape = {img.shape}, label shape = {label.shape}")
+            
             try:
                 pred = model(img)
                 loss_val = loss_fn(pred, label)
@@ -78,11 +82,10 @@ def train(args):
             
             train_losses.append(loss_val.item())
             global_step += 1
-
             if batch_idx % 50 == 0:
                 print(f"Epoch [{epoch+1}/{args.num_epoch}], Step [{batch_idx}/{len(train_loader)}], Loss: {loss_val.item():.4f}")
         
-        avg_train_loss = np.mean(train_losses)
+        avg_train_loss = np.mean(train_losses) if train_losses else float('inf')
         epoch_duration = time.time() - epoch_start_time
         print(f"Epoch {epoch+1} Completed - Avg Train Loss: {avg_train_loss:.4f} - Duration: {epoch_duration:.2f}s")
         
@@ -114,7 +117,6 @@ def train(args):
     total_duration = time.time() - start_time
     print(f"\nTraining Completed - Total Duration: {total_duration/60:.2f} minutes")
     save_model(model)
-    print("Final model saved.")
 
 def log(logger, img, label, pred, global_step):
     """
@@ -126,6 +128,8 @@ def log(logger, img, label, pred, global_step):
     """
     import matplotlib.pyplot as plt
     import torchvision.transforms.functional as TF
+    import numpy as np
+    
     fig, ax = plt.subplots(1, 1, figsize=(6,6))
     img_np = TF.to_pil_image(img[0].cpu())
     ax.imshow(img_np)

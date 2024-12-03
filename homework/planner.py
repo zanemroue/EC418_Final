@@ -13,32 +13,35 @@ def spatial_argmax(logit):
     """
     weights = F.softmax(logit.view(logit.size(0), -1), dim=-1).view_as(logit)
     return torch.stack((
-        (weights.sum(1) * torch.linspace(-1, 1, logit.size(2)).to(logit.device)[None]).sum(1),
-        (weights.sum(2) * torch.linspace(-1, 1, logit.size(1)).to(logit.device)[None]).sum(1)
+        (weights.sum(2) * torch.linspace(-1, 1, logit.size(2)).to(logit.device)).sum(1),
+        (weights.sum(1) * torch.linspace(-1, 1, logit.size(1)).to(logit.device)).sum(1)
     ), 1)
 
 class Planner(nn.Module):
     def __init__(self):
         super(Planner, self).__init__()
-        # Load ResNet18 model
-        self.resnet = models.resnet18(pretrained=False)
-        # Modify the first convolutional layer
-        self.resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.resnet.maxpool = nn.Identity()
-        # Replace the fully connected layer to output feature maps for spatial_argmax
-        self.resnet.fc = nn.Sequential(
-            nn.Conv2d(self.resnet.fc.in_features, 2, kernel_size=1),
-            nn.ReLU()
+        # Load ResNet18 model without the fully connected layer
+        resnet = models.resnet18(pretrained=False)
+        resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        resnet.maxpool = nn.Identity()
+        self.features = nn.Sequential(*list(resnet.children())[:-2])  # Exclude avgpool and fc
+        
+        # Add custom convolutional layers for spatial regression
+        self.conv_regression = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 2, kernel_size=1)
         )
-
+        
     def forward(self, img):
         """
         Predict the aim point in image coordinate, given the SuperTuxKart image
-        @img: (B,3,96,128)
-        return: (B,2)
+        @img: (B, 3, H, W)
+        return: (B, 2)
         """
-        x = self.resnet(img)  # Output shape: (B, 2, H, W)
-        x = spatial_argmax(x[:, 0])
+        x = self.features(img)  # Output shape: (B, 512, H', W')
+        x = self.conv_regression(x)  # Output shape: (B, 2, H', W')
+        x = spatial_argmax(x[:, 0])  # Apply spatial argmax on the first channel
         return x
 
 def save_model(model):
