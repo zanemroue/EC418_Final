@@ -17,7 +17,7 @@ def train(args):
         train_logger = tb.SummaryWriter(path.join(args.log_dir, 'train'))
         valid_logger = tb.SummaryWriter(path.join(args.log_dir, 'valid'))
 
-    device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     
     print("Starting training...")
     print(f"Using device: {device}")
