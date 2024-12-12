@@ -23,21 +23,13 @@ def spatial_argmax(logit):
 class Planner(nn.Module):
     def __init__(self):
         super(Planner, self).__init__()
-        # Load ResNet18 model without pretrained weights
         resnet = models.resnet18(weights=None)
-        # Modify the first convolutional layer
         resnet.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        # Remove the maxpool layer
         resnet.maxpool = nn.Identity()
-        # Remove the avgpool layer
         resnet.avgpool = nn.Identity()
-        # Remove the fully connected layer
         resnet.fc = nn.Identity()
         
-        # Assign the modified ResNet to self.resnet
-        self.resnet = resnet  # Retains original layer names like resnet.conv1, resnet.layer1, etc.
-        
-        # Add custom convolutional layers for spatial regression
+        self.resnet = resnet
         self.conv_regression = nn.Sequential(
             nn.Conv2d(512, 256, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -45,7 +37,6 @@ class Planner(nn.Module):
         )
     
     def forward(self, img):
-        # Manually define the forward pass to prevent flattening
         x = self.resnet.conv1(img)
         x = self.resnet.bn1(x)
         x = self.resnet.relu(x)
@@ -56,9 +47,8 @@ class Planner(nn.Module):
         x = self.resnet.layer3(x)
         x = self.resnet.layer4(x)
         
-        # Do not apply avgpool or flatten
-        x = self.conv_regression(x)  # x now has shape [batch_size, 2, H, W]
-        x = spatial_argmax(x[:, 0])  # x is now [batch_size, 2]
+        x = self.conv_regression(x)
+        x = spatial_argmax(x[:, 0])
         return x
 
 def save_model(model):
@@ -76,10 +66,9 @@ def load_model():
     if path.exists(model_path):
         state_dict = load(model_path, map_location='cpu')
 
-        # Adjust state_dict keys to match current architecture
         filtered_state_dict = {k: v for k, v in state_dict.items() if k in model.state_dict()}
         
-        model.load_state_dict(filtered_state_dict, strict=False)  # Allow partial loading
+        model.load_state_dict(filtered_state_dict, strict=False)  
     else:
         raise FileNotFoundError(f"No saved model found at {model_path}")
     return model
@@ -90,7 +79,6 @@ if __name__ == '__main__':
     from argparse import ArgumentParser
 
     def test_planner(args):
-        # Load model
         planner = load_model().eval()
         pytux = PyTux()
         for t in args.track:

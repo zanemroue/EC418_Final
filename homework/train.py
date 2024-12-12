@@ -6,7 +6,7 @@ from utils import load_data
 import dense_transforms
 from torch.utils.data import random_split
 import time
-import matplotlib.pyplot as plt  # Added for plotting
+import matplotlib.pyplot as plt
 
 
 def train(args):
@@ -37,7 +37,7 @@ def train(args):
     import inspect
     transform = eval(args.transform, {k: v for k, v in inspect.getmembers(dense_transforms) if inspect.isclass(v)})
     
-    # Load and split data into training and validation sets
+    #Load and split data into training and validation sets
     full_dataset = load_data('drive_data', transform=transform, num_workers=args.num_workers)
     if len(full_dataset) == 0:
         raise ValueError("Loaded dataset is empty. Please check the dataset path and contents.")

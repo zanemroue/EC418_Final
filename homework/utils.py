@@ -4,13 +4,16 @@ import pystk
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as TF
 import dense_transforms
+import torch
 from PIL import Image
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from glob import glob
 from os import path
 
 
 RESCUE_TIMEOUT = 30
-TRACK_OFFSET = 15
+TRACK_OFFSET = 5
 DATASET_PATH = 'drive_data'
 
 class SuperTuxDataset(Dataset):
@@ -129,7 +132,9 @@ class PyTux:
 
             if planner:
                 image = np.array(self.k.render_data[0].image)
-                aim_point_image = planner(TF.to_tensor(image)[None]).squeeze(0).cpu().detach().numpy()
+                image_tensor = TF.to_tensor(image).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    aim_point_image = planner(image_tensor).squeeze(0).cpu().numpy()
 
             current_vel = np.linalg.norm(kart.velocity)
             action = controller(aim_point_image, current_vel)
@@ -167,12 +172,11 @@ if __name__ == '__main__':
     from controller import control
     from argparse import ArgumentParser
     from os import makedirs
-
+    from tabulate import tabulate  # Import tabulate for table formatting
 
     def noisy_control(aim_pt, vel):
         return control(aim_pt + np.random.randn(*aim_pt.shape) * aim_noise,
                        vel + np.random.randn() * vel_noise)
-
 
     parser = ArgumentParser("Collects a dataset for the high-level planner")
     parser.add_argument('track', nargs='+')
@@ -187,11 +191,13 @@ if __name__ == '__main__':
         makedirs(args.output)
     except OSError:
         pass
+
     pytux = PyTux()
+    results = []  # To store results for the summary table
+
     for track in args.track:
         n, images_per_track = 0, args.n_images // len(args.track)
         aim_noise, vel_noise = 0, 0
-
 
         def collect(_, im, pt):
             from PIL import Image
@@ -205,10 +211,14 @@ if __name__ == '__main__':
                     f.write('%0.1f,%0.1f' % tuple(pt))
             n += 1
 
-
         while n < args.steps_per_track:
             steps, how_far = pytux.rollout(track, noisy_control, max_frames=1000, verbose=args.verbose, data_callback=collect)
-            print(steps, how_far)
-            # Add noise after the first round
+            print(f"Track: {track}, Steps: {steps}, Progress: {how_far * 100:.2f}%")
+            results.append((track, steps, how_far * 100))  # Add track results to the list
             aim_noise, vel_noise = args.aim_noise, args.vel_noise
+
     pytux.close()
+
+    # Generate and Print the Results Table
+    print("\nTrack Performance Summary:")
+    print(tabulate(results, headers=["Track", "Steps Taken", "Track Completion (%)"]))
